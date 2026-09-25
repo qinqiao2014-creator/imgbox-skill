@@ -30,6 +30,67 @@ MODELS = [
 DEFAULT_MODEL = "doubao-seedream-5-0-pro-260628"
 API_URL = "https://ark.cn-beijing.volces.com/api/v3/images/generations"
 
+# ---------- 每日硬配额（2026-09-25 用户指令写死，任何实例不得绕过） ----------
+# 火山方舟 Seedream 账号每日额度 20 张，每天 0 点重置。
+# 当日用量达到 20 张后，任何生图请求直接拒绝：不犹豫、不建议重试、不换参数绕过。
+# 背景：2026-09-25 曾批量出图一次性烧穿当天额度，用户立此规矩——
+#       限额场景一次只出一张，等用户确认再出下一张。
+DAILY_LIMIT = 20
+QUOTA_FILE = (
+    Path(__file__).resolve().parents[2] / "config" / "providers" / "seedream_quota.json"
+)
+
+
+def _today() -> str:
+    return time.strftime("%Y-%m-%d")
+
+
+def _quota_state() -> Dict[str, Any]:
+    """读取当日配额状态；记账文件缺失/损坏/跨天时视为新的一天（从零开始）。"""
+    today = _today()
+    try:
+        if QUOTA_FILE.exists():
+            data = json.loads(QUOTA_FILE.read_text(encoding="utf-8"))
+            if data.get("date") == today:
+                return {"date": today, "used": int(data.get("used", 0))}
+    except Exception:
+        pass
+    return {"date": today, "used": 0}
+
+
+def _check_quota() -> Dict[str, Any]:
+    """API 调用前的配额闸门：当日已用 ≥ 20 张 → 直接拒绝退出，不发任何请求。"""
+    state = _quota_state()
+    if state["used"] >= DAILY_LIMIT:
+        raise SystemExit(
+            f"❌ Seedream 今日额度已用完（{state['used']}/{DAILY_LIMIT}，{state['date']}）。\n"
+            f"   每日 0 点重置，明天再来；急用请改用 stepfun 或 openai。\n"
+            f"   （上限由用户指令写死在 scripts/providers/seedream.py，任何实例不得绕过。）"
+        )
+    return state
+
+
+def _consume_quota(n: int = 1) -> None:
+    """API 已计费后记账：按实际生成张数累加当日用量。"""
+    state = _quota_state()
+    state["used"] += n
+    QUOTA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    QUOTA_FILE.write_text(
+        json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def quota_status() -> Dict[str, Any]:
+    """对外暴露当日配额余量（list / doctor 展示用，不触发任何请求）。"""
+    state = _quota_state()
+    return {
+        "date": state["date"],
+        "used": state["used"],
+        "limit": DAILY_LIMIT,
+        "remaining": max(DAILY_LIMIT - state["used"], 0),
+        "exhausted": state["used"] >= DAILY_LIMIT,
+    }
+
 
 def _api_key() -> str:
     key = get_api_key(NAME)
@@ -161,6 +222,8 @@ class SeedreamProvider(BaseProvider):
         response_format: str = "url",
         **_: Any,
     ) -> ImageResult:
+        # 每日硬配额闸门：在任何 API 调用之前检查，超限直接拒绝
+        _check_quota()
         endpoint = model or _endpoint()
         # 原生透明生图要求参考图本身透明：自动把不透明参考图转透明
         if background == "transparent" and image:
@@ -170,19 +233,19 @@ class SeedreamProvider(BaseProvider):
             output_format, image, optimize_mode, background, layer_decomposition,
         )
 
-        req = urllib.request.Request(
-            API_URL,
-            data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {_api_key()}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-
         try:
-            with urllib.request.urlopen(req, timeout=180) as r:
-                resp = json.loads(r.read().decode("utf-8"))
+            req_obj = urllib.request.Request(API_URL,
+                data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {_api_key()}",
+                    "Content-Type": "application/json",
+                },
+                method="POST")
+            with urllib.request.urlopen(req_obj, timeout=300) as r:
+                raw = r.read()
+                if len(raw) != int(r.headers.get("Content-Length", len(raw))):
+                    raise SystemExit("Seedream 响应被截断（IncompleteRead），请重试。")
+                resp = json.loads(raw.decode("utf-8"))
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", "ignore")
             raise SystemExit(f"API 错误 {e.code}: {detail}")
@@ -191,6 +254,9 @@ class SeedreamProvider(BaseProvider):
 
         if "data" not in resp or not resp["data"]:
             raise SystemExit(f"返回异常: {json.dumps(resp, ensure_ascii=False)}")
+
+        # API 已计费：按实际返回张数扣减当日配额（硬配额 20/天）
+        _consume_quota(len(resp["data"]))
 
         # Multi-image results (layer decomposition / multi-image gen) -> save all.
         data = resp["data"]

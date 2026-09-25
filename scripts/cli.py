@@ -322,6 +322,11 @@ def cmd_list(_: argparse.Namespace) -> None:
         print(f"    模型: {', '.join(p.models)}")
         st = config_store.status(name)
         print(f"    配置: {'已配置' if st['configured'] else '未配置'}")
+        if name == "seedream":
+            from providers import seedream as _sd
+            q = _sd.quota_status()
+            state = "已用完，明天 0 点重置" if q["exhausted"] else f"剩余 {q['remaining']} 张"
+            print(f"    今日额度: {q['used']}/{q['limit']}（{state}）")
         print()
 
 
@@ -458,7 +463,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_poster.add_argument("--ratio", default="3:4", choices=["3:4", "9:16", "1:1"],
                           help="画面比例（默认 3:4）")
     p_poster.add_argument("--custom-size", default=None, help="自定义尺寸（如 1024x1024），覆盖 --ratio")
-    p_poster.add_argument("--provider", default="stepfun", help="生图厂商（默认 stepfun；seedream 已于 2026-09-25 禁用）")
+    p_poster.add_argument("--provider", default="stepfun", help="生图厂商（默认 stepfun；seedream 每日限额 20 张，跨天重置）")
     p_poster.add_argument("--model", default=None, help="模型名（默认用该厂商的 default）")
     p_poster.add_argument("--out", default=None, help="输出路径")
     p_poster.add_argument("--strict-text", action="store_true",

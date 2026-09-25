@@ -10,12 +10,13 @@ from .base import BaseProvider
 _REGISTRY: Dict[str, Type[BaseProvider]] = {}
 _LOADED: List[str] = []
 
-# ★ 2026-09-25 用户指令：「接下来你就不要用火山引擎生图了」——全局禁用火山方舟 Seedream。
-#   机器可读禁用态：登记在本表即拒绝 get() / configure（ARK_API_KEY 环境变量兜底也一并挡住）。
-#   恢复须用户显式解禁（从本表移除并同步 SKILL.md 说明），不得自行放开。
-DISABLED: Dict[str, str] = {
-    "seedream": "2026-09-25 用户指令：全局禁用火山引擎生图",
-}
+# ★ 2026-09-25 用户指令时间线：先全局禁用 Seedream，同日用户显式解禁
+#   （「imgbox里不要封死seedream」「你先解禁 然后生成」）。
+#   当前对 Seedream 的约束不再是本表，而是 scripts/providers/seedream.py 内的
+#   「每日 20 张硬配额」：config/providers/seedream_quota.json 记账、跨天重置、
+#   超限在 API 调用前直接拒绝。本表保持为空。
+#   若用户再次要求全局禁用，在此登记即可全量挡住（闸门在 get / configure 之前生效）。
+DISABLED: Dict[str, str] = {}
 
 
 def _load(name: str) -> None:

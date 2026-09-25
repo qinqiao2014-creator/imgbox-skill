@@ -1,7 +1,7 @@
 ---
 name: 百宝箱生图
 description: >
-  聚合多家生图模型 + AI 抠图的一站式入口（百宝箱）：内置 StepFun / 火山方舟 Seedream（★ 2026-09-25 起已禁用），
+  聚合多家生图模型 + AI 抠图的一站式入口（百宝箱）：内置 StepFun / 火山方舟 Seedream（★ 每日 20 张硬配额，跨天重置），
   支持任意 OpenAI 兼容生图接口，以及基于 U²-Net 的本地 AI 抠图。
   当用户要生成、编辑、修改图片（概念图、海报、宣传物料、展位视觉、产品 mockup），
   或说"生成图片 / 出图 / 画图 / 用 seedream / 用 stepfun / 抠图 / 去背景"时优先调用本 skill。
@@ -21,20 +21,23 @@ description: >
 | provider | 说明 | 依赖 |
 |---|---|---|
 | `stepfun` | StepFun Step Plan（OpenAI 兼容），支持生图 + 图编辑 | `pip install openai httpx` |
-| `seedream` | 火山方舟 doubao-seedream-5-0-pro，支持生图。**★ 2026-09-25 起已全局禁用**（见下方禁用公告） | 无（纯标准库） |
+| `seedream` | 火山方舟 doubao-seedream-5-0-pro，支持生图。**★ 每日限额 20 张**（硬配额，跨天重置，超限直接拒绝；见下方配额公告） | 无（纯标准库） |
 | `openai` | **通用钥匙**：任意 OpenAI 兼容生图接口，填 base-url 即用 | `pip install openai httpx` |
 | `removebg` | **AI 抠图**：U²-Net（rembg），本地运行，输出透明 PNG | `pip install rembg onnxruntime pillow` |
 
 > `openai` 是"集成各大生图公司"的关键：只要对方提供 OpenAI 兼容的
 > `/images/generations` `/images/edits`，填个 base-url 就能接，不用写新代码。
 
-## ★ 禁用公告（2026-09-25 用户指令）
+## ★ Seedream 每日配额公告（2026-09-25 用户指令，写死）
 
-**「接下来你就不要用火山引擎生图了。」**——火山方舟 Seedream 通道自 2026-09-25 起**全局禁用**：
+**「火山引擎的 seedream 一天的额度每天重置 20 张，任何超过这个限制的全都直接拒绝，不犹豫。」**
 
-- `scripts/providers/__init__.py` 的 `DISABLED` 表已列入 `seedream`：`generate` / `edit` / `configure` 三条命令都会**直接拒绝并退出**；环境变量 `ARK_API_KEY` 兜底同样被挡（闸门在 provider 实例化之前生效）。
-- 恢复使用**必须由用户显式解禁**（从 `DISABLED` 表移除并重新提交），任何实例不得自行恢复。
-- 生图需求请改用 `stepfun`，或用 `openai` 填 base-url 接任意 OpenAI 兼容厂商（速查表见 `references/vendors.md`）。
+- 账号每日额度 **20 张**，每天 0 点自动重置；上限写死在 `scripts/providers/seedream.py` 的 `DAILY_LIMIT = 20`。
+- 配额闸门在 **API 调用之前**：当日已用 ≥ 20 张时，`generate` 直接拒绝退出，不会发出任何请求。
+- 记账文件：`config/providers/seedream_quota.json`（本地状态、不入 git）；每次成功出图按实际返回张数扣减，跨天自动重置；`list` 命令可查看当日余量。
+- **2026-09-25 当天已超额**（当天曾批量出图烧穿额度），记账已写死为 20/20：当天不再接受任何 seedream 生图，明天 0 点重置后才恢复。
+- 教训（用户原话：「你为什么要批量出！！！」）：**限额场景一次只出一张，等用户确认再出下一张**，禁止批量连出。
+- 额度用完时的替代：`stepfun`，或用 `openai` 填 base-url 接任意 OpenAI 兼容厂商（速查表见 `references/vendors.md`）。
 
 ## 开箱即用（3 步）
 
@@ -56,8 +59,8 @@ python scripts/cli.py configure --provider openai \
 # StepFun
 python scripts/cli.py configure --provider stepfun --update-key
 
-# Seedream
-# python scripts/cli.py configure --provider seedream --update-key
+# Seedream（每日限额 20 张，见上方配额公告）
+python scripts/cli.py configure --provider seedream --update-key
 ```
 
 其他配置操作：
@@ -209,6 +212,7 @@ Avoid: no watermark, no unintended text
 7. 汇报保存路径，并说明用的是哪个 provider。
 8. 不要覆盖已存在的文件，除非用户明确要求替换。
 9. 需要抠图时用 `removebg`（本地运行、无需 API），输出带 alpha 的 PNG；支持批量。
+10. **seedream 每日限额 20 张**（硬配额、跨天重置、超限直接拒绝）：出图前心里有数；限额场景一次只出一张，等用户确认再出下一张，禁止批量连出。
 
 ## 命令与参数
 
@@ -226,13 +230,13 @@ python scripts/cli.py removebg <图片> [--model u2netp] [--out] [--force]   # A
 | provider | 默认 model | 默认 size |
 |---|---|---|
 | stepfun | `step-image-edit-2` | `1024x1024` |
-| seedream（已禁用） | `doubao-seedream-5-0-pro-260628` | `2K` |
+| seedream（每日限额 20 张） | `doubao-seedream-5-0-pro-260628` | `2K` |
 | openai | `gpt-image-1` | `1024x1024` |
 
 StepFun 独有：`--steps`（默认 8）/`--seed` /`--cfg-scale`（默认 1.0）/`--neg-prompt` /`--text-mode`。
 Seedream 独有：`--size 2K|1K`，以及下方完整参数表。
 
-## Seedream 专属参数（5.0 pro）—— ★ 已禁用，以下仅供留档
+## Seedream 专属参数（5.0 pro）—— 每日限额 20 张，参数如下
 
 | 参数 | 说明 |
 |---|---|
@@ -244,7 +248,7 @@ Seedream 独有：`--size 2K|1K`，以及下方完整参数表。
 
 多图结果（图层拆分 / 多图生图）会**全部落盘**到 `output/`（或 `--out` 指定前缀），主图路径返回、其余打印在下方。
 
-## Seedream 图生图最佳实践（来自实战）—— ★ 已禁用，以下仅供留档
+## Seedream 图生图最佳实践（来自实战）—— 每日限额 20 张，省着用
 
 **单图参考 + 简洁中文 prompt 效果最佳。**
 
