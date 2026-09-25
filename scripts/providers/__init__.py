@@ -10,6 +10,13 @@ from .base import BaseProvider
 _REGISTRY: Dict[str, Type[BaseProvider]] = {}
 _LOADED: List[str] = []
 
+# ★ 2026-09-25 用户指令：「接下来你就不要用火山引擎生图了」——全局禁用火山方舟 Seedream。
+#   机器可读禁用态：登记在本表即拒绝 get() / configure（ARK_API_KEY 环境变量兜底也一并挡住）。
+#   恢复须用户显式解禁（从本表移除并同步 SKILL.md 说明），不得自行放开。
+DISABLED: Dict[str, str] = {
+    "seedream": "2026-09-25 用户指令：全局禁用火山引擎生图",
+}
+
 
 def _load(name: str) -> None:
     if name in _LOADED:
@@ -35,6 +42,11 @@ def register(provider_cls: Type[BaseProvider]) -> Type[BaseProvider]:
 
 
 def get(name: str) -> BaseProvider:
+    if name in DISABLED:
+        raise SystemExit(
+            f"❌ provider「{name}」已被禁用：{DISABLED[name]}\n"
+            f"   ⇒ 确需恢复时，由用户显式解禁（编辑 scripts/providers/__init__.py 的 DISABLED 表）。"
+        )
     _load(name)
     if name not in _REGISTRY:
         # Make sure the registry is populated so the error lists real options
@@ -53,4 +65,9 @@ def available() -> List[str]:
         if stem in ("__init__", "base"):
             continue
         _load(stem)
-    return sorted(_REGISTRY)
+    return sorted(n for n in _REGISTRY if n not in DISABLED)
+
+
+def disabled() -> Dict[str, str]:
+    """已禁用的 provider 及原因（list / doctor 展示用）。"""
+    return dict(DISABLED)

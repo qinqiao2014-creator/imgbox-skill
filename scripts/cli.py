@@ -9,7 +9,7 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path when running as `python scripts/cli.py`
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from providers import get, available
+from providers import get, available, disabled as providers_disabled
 from providers.base import guard_overwrite
 import config_store
 
@@ -18,6 +18,11 @@ import config_store
 
 def cmd_configure(args: argparse.Namespace) -> None:
     name = args.provider
+    if name in providers_disabled():
+        raise SystemExit(
+            f"❌ provider「{name}」已被禁用：{providers_disabled()[name]}\n"
+            f"   ⇒ 恢复须用户显式解禁（编辑 scripts/providers/__init__.py 的 DISABLED 表）。"
+        )
     if args.clear:
         if config_store.clear(name):
             print(f"已清除 {name} 的配置：{config_store.config_path(name)}")
@@ -76,6 +81,13 @@ def cmd_doctor(_: argparse.Namespace) -> None:
         print()
         if st["configured"]:
             ok_count += 1
+
+    dis = providers_disabled()
+    if dis:
+        print("已禁用：")
+        for _n, _r in dis.items():
+            print(f"  [xx] {_n}  —— {_r}")
+        print()
 
     print(f"共 {len(available())} 个 provider，{ok_count} 个已配置。")
     if ok_count == 0:
@@ -446,7 +458,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_poster.add_argument("--ratio", default="3:4", choices=["3:4", "9:16", "1:1"],
                           help="画面比例（默认 3:4）")
     p_poster.add_argument("--custom-size", default=None, help="自定义尺寸（如 1024x1024），覆盖 --ratio")
-    p_poster.add_argument("--provider", default="seedream", help="生图厂商（默认 seedream）")
+    p_poster.add_argument("--provider", default="stepfun", help="生图厂商（默认 stepfun；seedream 已于 2026-09-25 禁用）")
     p_poster.add_argument("--model", default=None, help="模型名（默认用该厂商的 default）")
     p_poster.add_argument("--out", default=None, help="输出路径")
     p_poster.add_argument("--strict-text", action="store_true",

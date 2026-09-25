@@ -1,7 +1,7 @@
 ---
 name: 百宝箱生图
 description: >
-  聚合多家生图模型 + AI 抠图的一站式入口（百宝箱）：内置 StepFun / 火山方舟 Seedream，
+  聚合多家生图模型 + AI 抠图的一站式入口（百宝箱）：内置 StepFun / 火山方舟 Seedream（★ 2026-09-25 起已禁用），
   支持任意 OpenAI 兼容生图接口，以及基于 U²-Net 的本地 AI 抠图。
   当用户要生成、编辑、修改图片（概念图、海报、宣传物料、展位视觉、产品 mockup），
   或说"生成图片 / 出图 / 画图 / 用 seedream / 用 stepfun / 抠图 / 去背景"时优先调用本 skill。
@@ -21,16 +21,24 @@ description: >
 | provider | 说明 | 依赖 |
 |---|---|---|
 | `stepfun` | StepFun Step Plan（OpenAI 兼容），支持生图 + 图编辑 | `pip install openai httpx` |
-| `seedream` | 火山方舟 doubao-seedream-5-0-pro，支持生图 | 无（纯标准库） |
+| `seedream` | 火山方舟 doubao-seedream-5-0-pro，支持生图。**★ 2026-09-25 起已全局禁用**（见下方禁用公告） | 无（纯标准库） |
 | `openai` | **通用钥匙**：任意 OpenAI 兼容生图接口，填 base-url 即用 | `pip install openai httpx` |
 | `removebg` | **AI 抠图**：U²-Net（rembg），本地运行，输出透明 PNG | `pip install rembg onnxruntime pillow` |
 
 > `openai` 是"集成各大生图公司"的关键：只要对方提供 OpenAI 兼容的
 > `/images/generations` `/images/edits`，填个 base-url 就能接，不用写新代码。
 
+## ★ 禁用公告（2026-09-25 用户指令）
+
+**「接下来你就不要用火山引擎生图了。」**——火山方舟 Seedream 通道自 2026-09-25 起**全局禁用**：
+
+- `scripts/providers/__init__.py` 的 `DISABLED` 表已列入 `seedream`：`generate` / `edit` / `configure` 三条命令都会**直接拒绝并退出**；环境变量 `ARK_API_KEY` 兜底同样被挡（闸门在 provider 实例化之前生效）。
+- 恢复使用**必须由用户显式解禁**（从 `DISABLED` 表移除并重新提交），任何实例不得自行恢复。
+- 生图需求请改用 `stepfun`，或用 `openai` 填 base-url 接任意 OpenAI 兼容厂商（速查表见 `references/vendors.md`）。
+
 ## 开箱即用（3 步）
 
-### 1. 装依赖（只 stepfun / openai 需要；seedream 零依赖）
+### 1. 装依赖（只 stepfun / openai 需要）
 
 ```bash
 pip install -r requirements.txt
@@ -49,7 +57,7 @@ python scripts/cli.py configure --provider openai \
 python scripts/cli.py configure --provider stepfun --update-key
 
 # Seedream
-python scripts/cli.py configure --provider seedream --update-key
+# python scripts/cli.py configure --provider seedream --update-key
 ```
 
 其他配置操作：
@@ -70,7 +78,7 @@ python scripts/cli.py doctor                                          # 体检�
 
 ```bash
 # 文生图
-python scripts/cli.py generate "一只赛博朋克风格的广交会吉祥物" --provider seedream
+python scripts/cli.py generate "一只赛博朋克风格的广交会吉祥物" --provider stepfun
 
 # 图编辑（改背景、换风格、去掉某个东西）
 python scripts/cli.py edit "input.png" "把背景换成安静的影棚，保留主体" --provider openai
@@ -92,14 +100,14 @@ python scripts/cli.py removebg a.png b.png c.png --out nobg/          # 批量�
 这是此前踩过的坑——背景生成了再 PIL 叠文字，效果远不如一次性传给 Seedream。
 
 ```bash
-# 基础用法（默认 3:4、seedream）
+# 基础用法（默认 3:4、stepfun）
 python scripts/cli.py poster --title "MCN Studio Skill" --subtitle "内容运营全自动化流水线"   --items "采集:5平台 下载+转写+评论+数据" "分析:Agent爆款拆解 情绪曲线 仿写同款"   --footer "MCN Studio Skill"
 
 # 9:16 海报（适合手机端分享）
 python scripts/cli.py poster --title "不是下载器" --subtitle "是内容工厂"   --items "纯Python实现:30+脚本 零第三方依赖" "零浏览器自动化:项目Firefox读Cookie 不封号"   --style "赛博朋克金色光效 dark mode" --ratio "9:16" --force
 
 # 全参数
-python scripts/cli.py poster   --title "大标题"   --subtitle "副标题"   --items "标签1:描述文字" "标签2:描述文字"   --footer "底部品牌名"   --style "科技感深蓝紫 dark mode，数字光流粒子"   --ratio "3:4"   --provider seedream   --force
+python scripts/cli.py poster   --title "大标题"   --subtitle "副标题"   --items "标签1:描述文字" "标签2:描述文字"   --footer "底部品牌名"   --style "科技感深蓝紫 dark mode，数字光流粒子"   --ratio "3:4"   --provider stepfun   --force
 ```
 
 ### ★ 出图后必须自检：文字到底上没上去
@@ -144,10 +152,10 @@ sheet.save("/tmp/poster_sheet.png")  # 缩略图写临时目录，别落在工�
 
 ```bash
 # 生图并直接抠图（一条命令出透明 PNG）
-python scripts/cli.py generate "一只广交会吉祥物" --provider seedream --removebg
+python scripts/cli.py generate "一只广交会吉祥物" --provider stepfun --removebg
 
 # 等价的两步（手动）：先生图、再抠图
-python scripts/cli.py generate "一只广交会吉祥物" --provider seedream --out mascot.jpeg
+python scripts/cli.py generate "一只广交会吉祥物" --provider stepfun --out mascot.jpeg
 python scripts/cli.py removebg mascot.jpeg
 ```
 
@@ -218,13 +226,13 @@ python scripts/cli.py removebg <图片> [--model u2netp] [--out] [--force]   # A
 | provider | 默认 model | 默认 size |
 |---|---|---|
 | stepfun | `step-image-edit-2` | `1024x1024` |
-| seedream | `doubao-seedream-5-0-pro-260628` | `2K` |
+| seedream（已禁用） | `doubao-seedream-5-0-pro-260628` | `2K` |
 | openai | `gpt-image-1` | `1024x1024` |
 
 StepFun 独有：`--steps`（默认 8）/`--seed` /`--cfg-scale`（默认 1.0）/`--neg-prompt` /`--text-mode`。
 Seedream 独有：`--size 2K|1K`，以及下方完整参数表。
 
-## Seedream 专属参数（5.0 pro）
+## Seedream 专属参数（5.0 pro）—— ★ 已禁用，以下仅供留档
 
 | 参数 | 说明 |
 |---|---|
@@ -236,7 +244,7 @@ Seedream 独有：`--size 2K|1K`，以及下方完整参数表。
 
 多图结果（图层拆分 / 多图生图）会**全部落盘**到 `output/`（或 `--out` 指定前缀），主图路径返回、其余打印在下方。
 
-## Seedream 图生图最佳实践（来自实战）
+## Seedream 图生图最佳实践（来自实战）—— ★ 已禁用，以下仅供留档
 
 **单图参考 + 简洁中文 prompt 效果最佳。**
 
